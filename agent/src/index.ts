@@ -16,7 +16,6 @@ import { AlexaClientInterface } from "@elizaos/client-alexa";
 import { MongoDBDatabaseAdapter } from "@elizaos/adapter-mongodb";
 import { DevaClientInterface } from "@elizaos/client-deva";
 
-import { databaristaPlugin } from "@elizaos/plugin-databarista";
 import { FarcasterClientInterface } from "@elizaos/client-farcaster";
 import { OmniflixPlugin } from "@elizaos/plugin-omniflix";
 import { JeeterClientInterface } from "@elizaos/client-simsai";
@@ -1018,7 +1017,7 @@ export async function createAgent(
         evaluators: [],
         character,
         // character.plugins are handled when clients are added
-        plugins: [databaristaPlugin]
+        plugins: [bootstrapPlugin]
             .flat()
             .filter(Boolean),
         providers: [],
