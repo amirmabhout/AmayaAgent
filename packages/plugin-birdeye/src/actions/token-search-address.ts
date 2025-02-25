@@ -37,6 +37,7 @@ export const tokenSearchAddressAction = {
         "SEARCH_TOKEN_ADDRESS",
         "FIND_TOKEN_ADDRESS",
         "LOOKUP_TOKEN_ADDRESS",
+        "GET_PRICE",
         "CHECK_TOKEN_ADDRESS",
         "GET_TOKEN_BY_ADDRESS",
         "TOKEN_ADDRESS_INFO",

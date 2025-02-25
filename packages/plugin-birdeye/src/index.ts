@@ -2,7 +2,8 @@ import type { Plugin } from "@elizaos/core";
 import { tokenSearchAddressAction } from "./actions/token-search-address";
 import { tokenSearchSymbolAction } from "./actions/token-search-symbol";
 import { walletSearchAddressAction } from "./actions/wallet-search-address";
-import { agentPortfolioProvider } from "./providers/agent-portfolio-provider";
+//import { agentPortfolioProvider } from "./providers/agent-portfolio-provider";
+import { nibblesPriceProvider } from "./providers/nibbles-price-provider";
 
 export const birdeyePlugin: Plugin = {
     name: "birdeye",
@@ -14,7 +15,7 @@ export const birdeyePlugin: Plugin = {
         // testAllEndpointsAction, // this action can be used to optionally test all endpoints
     ],
     evaluators: [],
-    providers: [agentPortfolioProvider],
+    providers: [nibblesPriceProvider],
 };
 
 export default birdeyePlugin;
