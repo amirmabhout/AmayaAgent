@@ -43,7 +43,7 @@ const twitterPostTemplate = `
 {{lore}}
 {{topics}}
 
-{{providers}}
+{{providers}} (IF YOU SEE SUDDEN MOVES UP OR DOWN IN PRICES, Eg. 20% or higher up or down, comment about the price action, but only if it's relevant to the topic of the post.)
 
 {{characterPostExamples}}
 
