@@ -1213,8 +1213,10 @@ export class MessageManager {
                 this.interestChats[chatId].messages.push({
                     userId: stringToUuid(ctx.from.id.toString()),
                     userName:
+                        (ctx.from.first_name && ctx.from.last_name 
+                            ? `${ctx.from.first_name} ${ctx.from.last_name}`
+                            : ctx.from.first_name) || 
                         ctx.from.username ||
-                        ctx.from.first_name ||
                         "Unknown User",
                     content: { text: messageText, source: "telegram" },
                 });
@@ -1236,7 +1238,11 @@ export class MessageManager {
 
             // Get user name
             const userName =
-                ctx.from.username || ctx.from.first_name || "Unknown User";
+                (ctx.from.first_name && ctx.from.last_name 
+                    ? `${ctx.from.first_name} ${ctx.from.last_name}`
+                    : ctx.from.first_name) || 
+                ctx.from.username ||
+                "Unknown User";
 
             // Get chat ID
             const chatId = stringToUuid(
