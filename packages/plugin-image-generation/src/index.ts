@@ -12,6 +12,8 @@ import { generateImage } from "@elizaos/core";
 import fs from "node:fs";
 import path from "node:path";
 import { validateImageGenConfig } from "./environment";
+import Replicate from "replicate";
+import crypto from "crypto";
 
 export function saveBase64Image(base64Data: string, filename: string): string {
     // Create generatedImages directory if it doesn't exist
@@ -62,6 +64,76 @@ export async function saveHeuristImage(
     return filepath;
 }
 
+// Add a new function to generate images using Replicate
+export async function generateImageWithReplicate(
+    prompt: string,
+    options: {
+        model?: string;
+        goFast?: boolean;
+        loraScale?: number; 
+        megapixels?: string;
+        numOutputs?: number;
+        aspectRatio?: string;
+        outputFormat?: string;
+        guidanceScale?: number;
+        outputQuality?: number;
+        promptStrength?: number;
+        extraLoraScale?: number;
+        numInferenceSteps?: number;
+    },
+    runtime: IAgentRuntime
+): Promise<string[]> {
+    const replicateApiToken = runtime.getSetting("REPLICATE_API_TOKEN") || process.env.REPLICATE_API_TOKEN;
+    
+    if (!replicateApiToken) {
+        throw new Error("REPLICATE_API_TOKEN is required for Replicate image generation");
+    }
+    
+    const replicate = new Replicate({
+        auth: replicateApiToken,
+    });
+    
+    elizaLogger.log("Generating image with Replicate using prompt:", prompt);
+    
+    try {
+        const output = await replicate.run(
+            "theredpandas/amayaagent:9da60c702612f3aded0cdb6d2cb37cee723962538de6a3d697ffd0399ddcbee5",
+            {
+                input: {
+                    model: options.model || "dev",
+                    go_fast: options.goFast || false,
+                    lora_scale: options.loraScale || 1,
+                    megapixels: options.megapixels || "1",
+                    num_outputs: options.numOutputs || 1,
+                    aspect_ratio: options.aspectRatio || "1:1",
+                    output_format: options.outputFormat || "webp",
+                    guidance_scale: options.guidanceScale || 3,
+                    output_quality: options.outputQuality || 80,
+                    prompt_strength: options.promptStrength || 0.8,
+                    extra_lora_scale: options.extraLoraScale || 1,
+                    num_inference_steps: options.numInferenceSteps || 28,
+                    prompt: prompt,
+                }
+            }
+        );
+        
+        elizaLogger.log("Replicate response:", output);
+        
+        // Replicate returns an array of image URLs
+        if (Array.isArray(output)) {
+            return output;
+        } else if (typeof output === 'string') {
+            return [output];
+        } else {
+            elizaLogger.error("Unexpected response format from Replicate:", output);
+            return [];
+        }
+    } catch (error) {
+        elizaLogger.error("Error generating image with Replicate:", error);
+        throw error;
+    }
+}
+
 const imageGeneration: Action = {
     name: "GENERATE_IMAGE",
     similes: [
@@ -90,6 +162,7 @@ const imageGeneration: Action = {
         const livepeerGatewayUrlOk = !!runtime.getSetting(
             "LIVEPEER_GATEWAY_URL"
         );
+        const replicateApiTokenOk = !!runtime.getSetting("REPLICATE_API_TOKEN");
 
         return (
             anthropicApiKeyOk ||
@@ -99,7 +172,8 @@ const imageGeneration: Action = {
             openAiApiKeyOk ||
             veniceApiKeyOk ||
             nineteenAiApiKeyOk ||
-            livepeerGatewayUrlOk
+            livepeerGatewayUrlOk ||
+            replicateApiTokenOk
         );
     },
     handler: async (
@@ -120,6 +194,18 @@ const imageGeneration: Action = {
             stylePreset?: string;
             hideWatermark?: boolean;
             safeMode?: boolean;
+            // Replicate specific options
+            model?: string;
+            goFast?: boolean;
+            loraScale?: number;
+            megapixels?: string;
+            numOutputs?: number;
+            aspectRatio?: string;
+            outputFormat?: string;
+            outputQuality?: number;
+            promptStrength?: number;
+            extraLoraScale?: number;
+            numInferenceSteps?: number;
         },
         callback: HandlerCallback
     ) => {
@@ -165,6 +251,7 @@ To generate the image prompt, follow these steps:\n\n1. Analyze the content text
 
 9. Use concrete nouns and avoid abstract concepts when describing the main subject and elements of the scene.
 
+10. Always include the word "NIBBLES" in your prompt as its the trigger word for the fine tuned model
 Construct your image prompt using the following structure:\n\n
 1. Main subject: Describe the primary focus of the image based on your analysis
 2. Environment: Detail the setting or background
@@ -172,7 +259,7 @@ Construct your image prompt using the following structure:\n\n
 4. Colors: Mention the key colors and their relationships
 5. Mood: Convey the overall emotional tone
 6. Composition: Describe how elements are arranged in the frame
-7. Style: Incorporate the given style into the description
+7. Style: Incorporate the given style into the description and always include the word "NIBBLES" in your prompt as its the trigger word for the fine tuned model
 
 Ensure that your prompt is detailed, vivid, and incorporates all the elements mentioned above while staying true to the content and the specified style. LIMIT the image prompt 50 words or less. \n\nWrite a prompt. Only include the prompt and nothing else.`;
 
@@ -189,7 +276,78 @@ Ensure that your prompt is detailed, vivid, and incorporates all the elements me
 
         const res: { image: string; caption: string }[] = [];
 
-        elizaLogger.log("Generating image with prompt:", imagePrompt);
+        // Check if Replicate API token is available and use it if present
+        const replicateApiToken = runtime.getSetting("REPLICATE_API_TOKEN") || process.env.REPLICATE_API_TOKEN;
+        
+        if (replicateApiToken) {
+            elizaLogger.log("Generating image with Replicate using prompt:", imagePrompt);
+            try {
+                const replicateImages = await generateImageWithReplicate(
+                    imagePrompt,
+                    {
+                        model: options.model || "dev",
+                        goFast: options.goFast || false,
+                        loraScale: options.loraScale || 1,
+                        megapixels: options.megapixels || "1",
+                        numOutputs: options.numOutputs || options.count || 1,
+                        aspectRatio: options.aspectRatio || "1:1",
+                        outputFormat: options.outputFormat || "webp",
+                        guidanceScale: options.guidanceScale || 3,
+                        outputQuality: options.outputQuality || 80,
+                        promptStrength: options.promptStrength || 0.8,
+                        extraLoraScale: options.extraLoraScale || 1,
+                        numInferenceSteps: options.numInferenceSteps || 28,
+                    },
+                    runtime
+                );
+                
+                if (replicateImages && replicateImages.length > 0) {
+                    elizaLogger.log("Replicate image generation successful, number of images:", replicateImages.length);
+                    
+                    for (let i = 0; i < replicateImages.length; i++) {
+                        const imageUrl = replicateImages[i];
+                        const filename = `replicate_${Date.now()}_${i}`;
+                        
+                        // Save the image locally
+                        const filepath = await saveHeuristImage(imageUrl, filename);
+                        
+                        res.push({ image: filepath, caption: "..." });
+                        
+                        elizaLogger.log(`Saved Replicate image ${i + 1} to:`, filepath);
+                        
+                        callback(
+                            {
+                                text: "Here's your generated image",
+                                attachments: [
+                                    {
+                                        id: crypto.randomUUID(),
+                                        url: filepath,
+                                        title: "Generated image",
+                                        source: "imageGeneration",
+                                        description: "Check out my latest reel, anon",
+                                        text: "Image generated using theredpandas/amayaagent model",
+                                        contentType: "image/webp",
+                                    },
+                                ],
+                            },
+                            [
+                                {
+                                    attachment: filepath,
+                                    name: `${filename}.png`,
+                                },
+                            ]
+                        );
+                    }
+                    return;
+                }
+            } catch (error) {
+                elizaLogger.error("Replicate image generation failed:", error);
+                // Fall back to other image generation methods if available
+            }
+        }
+
+        // Fall back to the original image generation if Replicate fails or is not available
+        elizaLogger.log("Generating image with original method using prompt:", imagePrompt);
         const images = await generateImage(
             {
                 prompt: imagePrompt,
@@ -269,46 +427,24 @@ Ensure that your prompt is detailed, vivid, and incorporates all the elements me
 
                 elizaLogger.log(`Processing image ${i + 1}:`, filename);
 
-                //just dont even add a caption or a description just have it generate & send
-                /*
-                try {
-                    const imageService = runtime.getService(ServiceType.IMAGE_DESCRIPTION);
-                    if (imageService && typeof imageService.describeImage === 'function') {
-                        const caption = await imageService.describeImage({ imageUrl: filepath });
-                        captionText = caption.description;
-                        captionTitle = caption.title;
-                    }
-                } catch (error) {
-                    elizaLogger.error("Caption generation failed, using default caption:", error);
-                }*/
-
-                const _caption = "...";
-                /*= await generateCaption(
-                    {
-                        imageUrl: image,
-                    },
-                    runtime
-                );*/
-
-                res.push({ image: filepath, caption: "..." }); //caption.title });
+                res.push({ image: filepath, caption: "..." });
 
                 elizaLogger.log(
                     `Generated caption for image ${i + 1}:`,
-                    "..." //caption.title
+                    "..."
                 );
-                //res.push({ image: image, caption: caption.title });
 
                 callback(
                     {
-                        text: "...", //caption.description,
+                        text: "Here's your generated image",
                         attachments: [
                             {
                                 id: crypto.randomUUID(),
                                 url: filepath,
                                 title: "Generated image",
                                 source: "imageGeneration",
-                                description: "...", //caption.title,
-                                text: "...", //caption.description,
+                                description: "...",
+                                text: "...",
                                 contentType: "image/png",
                             },
                         ],

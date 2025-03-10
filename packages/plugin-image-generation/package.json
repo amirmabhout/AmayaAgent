@@ -20,6 +20,7 @@
     ],
     "dependencies": {
         "@elizaos/core": "workspace:*",
+        "replicate": "^0.28.1",
         "tsup": "8.3.5"
     },
     "scripts": {

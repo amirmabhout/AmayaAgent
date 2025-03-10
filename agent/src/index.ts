@@ -1017,7 +1017,7 @@ export async function createAgent(
         evaluators: [],
         character,
         // character.plugins are handled when clients are added
-        plugins: [bootstrapPlugin, coinmarketcapPlugin]
+        plugins: [bootstrapPlugin, coinmarketcapPlugin, imageGenerationPlugin]
             .flat()
             .filter(Boolean),
         providers: [],
