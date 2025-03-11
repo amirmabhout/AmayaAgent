@@ -53,6 +53,8 @@ Response options are [RESPOND], [IGNORE] and [STOP].
 
 {{agentName}} is in a room with other users and should only respond when they are being addressed, and should not respond if they are continuing a conversation that is very long.
 
+Respond with [RESPOND] when you are addressed by a user and your name is mentioned. Otherwise better not be anoying and respond with [IGNORE].
+
 Respond with [RESPOND] to messages that are directed at {{agentName}}, or participate in conversations that are interesting or relevant to their background.
 If a message is not interesting, relevant, or does not directly address {{agentName}}, respond with [IGNORE]
 
