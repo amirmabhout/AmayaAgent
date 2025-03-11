@@ -31,6 +31,7 @@ import {
 import type { State } from "@elizaos/core";
 import type { ActionResponse } from "@elizaos/core";
 import { MediaData } from "./types.ts";
+import Replicate from "replicate";
 
 const MAX_TIMELINES_TO_FETCH = 15;
 
@@ -105,12 +106,21 @@ export class TwitterPostClient {
     private approvalRequired = false;
     private discordApprovalChannelId: string;
     private approvalCheckInterval: number;
+    private enableImageGeneration = false; // Flag to enable/disable image generation
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
         this.runtime = runtime;
         this.twitterUsername = this.client.twitterConfig.TWITTER_USERNAME;
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
+        this.enableImageGeneration = this.client.twitterConfig.ENABLE_IMAGE_GENERATION || false;
+
+        // Check if Replicate API token is available
+        const replicateApiToken = runtime.getSetting("REPLICATE_API_TOKEN") || process.env.REPLICATE_API_TOKEN;
+        if (this.enableImageGeneration && !replicateApiToken) {
+            elizaLogger.warn("Image generation is enabled but REPLICATE_API_TOKEN is not set. Image generation will not work.");
+            this.enableImageGeneration = false;
+        }
 
         // Log configuration on initialization
         elizaLogger.log("Twitter Client Configuration:");
@@ -121,6 +131,10 @@ export class TwitterPostClient {
 
         elizaLogger.log(
             `- Enable Post: ${this.client.twitterConfig.ENABLE_TWITTER_POST_GENERATION ? "enabled" : "disabled"}`
+        );
+
+        elizaLogger.log(
+            `- Enable Image Generation: ${this.enableImageGeneration ? "enabled" : "disabled"}`
         );
 
         elizaLogger.log(
@@ -426,6 +440,12 @@ export class TwitterPostClient {
         mediaData?: MediaData[]
     ) {
         try {
+            elizaLogger.log(`Sending standard tweet with content: "${content.substring(0, 50)}..." and media: ${mediaData ? `${mediaData.length} items` : "none"}`);
+            
+            if (mediaData && mediaData.length > 0) {
+                elizaLogger.log(`Media details: Type: ${mediaData[0].mediaType}, Size: ${mediaData[0].data.length} bytes`);
+            }
+            
             const standardTweetResult = await client.requestQueue.add(
                 async () =>
                     await client.twitterClient.sendTweet(
@@ -446,6 +466,144 @@ export class TwitterPostClient {
         }
     }
 
+    /**
+     * Generates an image based on the tweet content
+     * @param tweetText The text of the tweet
+     * @returns Promise that resolves to MediaData array if successful, undefined if not
+     */
+    private async generateImageForTweet(tweetText: string): Promise<MediaData[] | undefined> {
+        try {
+            if (!this.enableImageGeneration) {
+                elizaLogger.log("Image generation is disabled");
+                return undefined;
+            }
+
+            elizaLogger.log("Generating image for tweet content");
+
+            // Create a prompt for image generation based on the tweet content
+            const IMAGE_SYSTEM_PROMPT = `Your task is to analyze the tweet content and create a detailed, creative prompt for image generation that will complement the tweet.
+
+Follow these guidelines to create an effective image prompt:
+
+1. Carefully analyze the tweet content to identify the main subject or concept being discussed.
+
+2. Choose a specific, concrete visual representation of the tweet's central idea or message.
+
+3. Determine an appropriate environment or setting that contextualizes the subject.
+
+4. Decide on suitable lighting that enhances the mood or atmosphere implied by the tweet.
+
+5. Choose a color palette that reflects the tweet's tone and complements the subject.
+
+6. Identify the overall mood or emotion conveyed by the tweet.
+
+7. Plan a composition that effectively showcases the subject and captures the tweet's essence.
+
+8. Use concrete nouns and avoid abstract concepts when describing the main subject and elements of the scene.
+
+9. Ensure the image will visually complement the tweet while being appropriate for a social media platform.
+
+10. Always include the word "NIBBLES" in your prompt as it's the trigger word for the fine-tuned model.
+
+Construct your image prompt using the following structure:
+
+1. Main subject: Describe the primary focus of the image based on your analysis
+2. Environment: Detail the setting or background
+3. Lighting: Specify the type and quality of light in the scene
+4. Colors: Mention the key colors and their relationships
+5. Mood: Convey the overall emotional tone
+6. Composition: Describe how elements are arranged in the frame
+7. Style: Incorporate a style appropriate for the tweet and always include the word "NIBBLES" in your prompt
+
+Ensure that your prompt is detailed, vivid, and incorporates all the elements mentioned above while staying true to the tweet content. LIMIT the image prompt to 50 words or less.
+
+Write a prompt. Only include the prompt and nothing else.`;
+
+            const imagePromptContext = `Generate an image prompt based on this tweet: "${tweetText}"`;
+            
+            elizaLogger.log("Generating image prompt with AI");
+            const imagePrompt = await generateText({
+                runtime: this.runtime,
+                context: imagePromptContext,
+                modelClass: ModelClass.MEDIUM,
+                customSystemPrompt: IMAGE_SYSTEM_PROMPT,
+            });
+
+            elizaLogger.log("Generated image prompt:", imagePrompt);
+
+            // Use Replicate API directly
+            const replicateApiToken = this.runtime.getSetting("REPLICATE_API_TOKEN") || process.env.REPLICATE_API_TOKEN;
+            
+            if (!replicateApiToken) {
+                elizaLogger.error("REPLICATE_API_TOKEN is required for image generation");
+                return undefined;
+            }
+            
+            elizaLogger.log("Initializing Replicate client");
+            const replicate = new Replicate({
+                auth: replicateApiToken,
+            });
+            
+            // Configure model options
+            const imageOptions = {
+                prompt: imagePrompt,
+                negative_prompt: "blurry, distorted, low quality",
+                aspect_ratio: "1:1", // Square image for Twitter
+                num_outputs: 1,
+                guidance_scale: 7.5,
+            };
+            
+            elizaLogger.log("Calling Replicate API to generate image with options:", JSON.stringify(imageOptions));
+            // Run the model to generate the image
+            try {
+                const output = await replicate.run(
+                    "theredpandas/amayaagent:9da60c702612f3aded0cdb6d2cb37cee723962538de6a3d697ffd0399ddcbee5", // Use the specific model version
+                    {
+                        input: imageOptions
+                    }
+                );
+                
+                // The output is an array of image URLs
+                const imageUrls = output as string[];
+                elizaLogger.log("Replicate API response:", JSON.stringify(imageUrls));
+                
+                if (imageUrls && imageUrls.length > 0) {
+                    elizaLogger.log("Fetching image from URL:", imageUrls[0]);
+                    // Fetch the image data and convert to MediaData format
+                    const response = await fetch(imageUrls[0]);
+                    if (!response.ok) {
+                        elizaLogger.error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+                        return undefined;
+                    }
+                    
+                    const imageBuffer = Buffer.from(await response.arrayBuffer());
+                    
+                    if (!imageBuffer || imageBuffer.length === 0) {
+                        elizaLogger.error("Received empty image buffer");
+                        return undefined;
+                    }
+                    
+                    const mediaData: MediaData[] = [{
+                        data: imageBuffer,
+                        mediaType: 'image/jpeg'
+                    }];
+                    
+                    elizaLogger.log(`Successfully generated image for tweet: ${imageUrls[0]} (size: ${imageBuffer.length} bytes)`);
+                    return mediaData;
+                } else {
+                    elizaLogger.error("Replicate API returned no image URLs");
+                }
+            } catch (replicateError) {
+                elizaLogger.error("Error calling Replicate API:", replicateError);
+            }
+            
+            return undefined;
+        } catch (error) {
+            elizaLogger.error("Error generating image for tweet:", error);
+            return undefined;
+        }
+    }
+
     async postTweet(
         runtime: IAgentRuntime,
         client: ClientBase,
@@ -457,6 +615,14 @@ export class TwitterPostClient {
     ) {
         try {
             elizaLogger.log(`Posting new tweet:\n`);
+            elizaLogger.log(`Image generation enabled: ${this.enableImageGeneration}`);
+
+            // If no media data is provided and image generation is enabled, generate an image
+            if (!mediaData && this.enableImageGeneration) {
+                elizaLogger.log("Attempting to generate image for tweet");
+                mediaData = await this.generateImageForTweet(tweetTextForPosting);
+                elizaLogger.log(`Image generation result: ${mediaData ? "successful" : "failed"}`);
+            }
 
             let result;
 
@@ -468,6 +634,7 @@ export class TwitterPostClient {
                     mediaData
                 );
             } else {
+                elizaLogger.log(`Sending standard tweet with media: ${mediaData ? "yes" : "no"}`);
                 result = await this.sendStandardTweet(
                     client,
                     tweetTextForPosting,

@@ -76,6 +76,7 @@ export const twitterEnvSchema = z.object({
     ACTION_TIMELINE_TYPE: z
         .nativeEnum(ActionTimelineType)
         .default(ActionTimelineType.ForYou),
+    ENABLE_IMAGE_GENERATION: z.boolean().default(true),
 });
 
 export type TwitterConfig = z.infer<typeof twitterEnvSchema>;
@@ -232,6 +233,12 @@ export async function validateTwitterConfig(
             ACTION_TIMELINE_TYPE:
                 runtime.getSetting("ACTION_TIMELINE_TYPE") ||
                 process.env.ACTION_TIMELINE_TYPE,
+
+            ENABLE_IMAGE_GENERATION:
+                parseBooleanFromText(
+                    runtime.getSetting("ENABLE_IMAGE_GENERATION") ||
+                        process.env.ENABLE_IMAGE_GENERATION
+                ) ?? true,
         };
 
         return twitterEnvSchema.parse(twitterConfig);
