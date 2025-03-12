@@ -493,7 +493,6 @@ Follow these guidelines to create an effective image prompt:
 
 4. Decide on suitable lighting that enhances the mood or atmosphere implied by the tweet.
 
-5. Choose a color palette that reflects the tweet's tone and complements the subject.
 
 6. Identify the overall mood or emotion conveyed by the tweet.
 
@@ -517,7 +516,7 @@ Construct your image prompt using the following structure:
 
 Ensure that your prompt is detailed, vivid, and incorporates all the elements mentioned above while staying true to the tweet content. LIMIT the image prompt to 50 words or less.
 
-Write a prompt. Only include the prompt and nothing else.`;
+Write ONLY THE OUTPUT prompt DESCRIBING THE IMAGE. Only include the prompt and nothing else. NO OTHER TEXT.`;
 
             const imagePromptContext = `Generate an image prompt based on this tweet: "${tweetText}"`;
             

@@ -111,7 +111,7 @@ export async function generateImageWithReplicate(
                     output_quality: options.outputQuality || 80,
                     prompt_strength: options.promptStrength || 0.8,
                     extra_lora_scale: options.extraLoraScale || 1,
-                    num_inference_steps: options.numInferenceSteps || 28,
+                    num_inference_steps: 50,
                     prompt: prompt,
                 }
             }
@@ -324,7 +324,7 @@ Ensure that your prompt is detailed, vivid, and incorporates all the elements me
                                         url: filepath,
                                         title: "Generated image",
                                         source: "imageGeneration",
-                                        description: "Check out my latest reel, anon",
+                                        description: "Check out my latest image, anon",
                                         text: "Image generated using theredpandas/amayaagent model",
                                         contentType: "image/webp",
                                     },
